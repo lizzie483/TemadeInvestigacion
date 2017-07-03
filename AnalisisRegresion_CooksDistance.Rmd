@@ -1,0 +1,224 @@
+---
+title: "Análisis de la Regresión y Distancia de Cook"
+author: "Lizeth Quispe"
+date: "30 de junio de 2017"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Análisis de la Regresián y Distancia de Cook
+
+## Introducción
+
+En muchas ocasiones en Inferencia Estadística necesitamos analizar una muestra para investigar las relaciones entre las variables, esto se hace con el objetivo de crear un modelo que pueda ser usado para predecir futuros valores que dicha variable pueda tomar. El proceso matemático de modelar una ecuación que mejor se ajuste a la muestra de datos inicial forma parte de una tecnica estadística conocida como **Análisis de Regresión.**
+
+Un caso de estudio simplificado de como funciona el modelado en estadístico podría ser el siguiente: Supongamos que un profesor desea predecir el promedio final (`GPA`) de cada uno de los alumnos al final de su primer año, para ello escogerá una muestra aleatoria de los promedios de estudiantes en años anteriores y obtendrá un **valor esperado** $E$. Una vez obtenido este valor le resultará muy fácil predecir los promedios de los alumnos actuales, dicha predicción o modelado es conocido como la **variable dependiente o respuesta deseada**.
+
+
+\[y=E(y)+\varepsilon
+\]
+
+En donde $y$ es la variable dependiente, la que se desea conocer, $E(y)$ el valor esperado o media y $\varepsilon$ un error de cálculo.
+
+```{r histograma1, comment=NA, eval=TRUE, echo=FALSE}
+library("Stat2Data")
+data("FirstYearGPA")
+hist(FirstYearGPA$GPA, main = "Cuadro de Frecuencias GPA", xlab = "GPA", ylab = "Frecuencias")
+
+```
+
+Este modelamiento lleva el nombre de **Modelo Probabilístico** de $y$. Y es la base para casi todos los modelos que se consideran en Análisis de la Regresión.
+
+Sin embargo, este modelo no toma en considereacion otras variables que puedan o no afectar el resultado deseado (i.e. IQ de los alumnos, creditos en curso de humanidades o ciencias, etc), estas variables son conocidas como **variables independientes** y son denotadas por $x_1,x_2,\dots, x_n$. El proceso de encontrar un modelo matemático que relaciona a $y$ con un conjunto de variables independientes y se ajusta mejor a la data inicial se conoce como Análisis de Regresión.
+
+## Análisis de Regresión
+
+El objetivo de esta rama de la metodología estadística es construir un modelo preciso -que relacione a $y$ con algunas variables independientes -que nos permita predecir posibles valores con error casi despreciable. Pero además de predecir valores de $y$ para específicos valores de $x_1,x_2,\dots,x_k$. Un modelo de regresión se puede usar para estimar el valor esperado o la media de $y$ y también para responder otras preguntas referentes a la relación entre $y$ y las demás variables independientes.
+
+### Sobre la Data
+
+La data otenida para realizar e análisis de regresión puede ser de dos tipos, **observacional** o **experimental**. Decimos que es del primer tipo cuando no se ha intentado manipular las variables independientes $x_1,x_2,\dots,x_n$, y han sido medidos sin error. En cambio si las variables independientes son controladas bajo los parámetros de un experimento, los datos se consideran **experimentales**.
+
+Cabe resaltar que en la mayoria de los casos, no es posible controlar la data a ser recolectada, en consecuencia, para las aplicaciones de regresiones la data suele ser observacional.
+
+## Tecnicas de Regresion
+
+El principal motivo por el cual hay diferentes técnicas de regresión es en base las tres métricas que se usan (cantidad de variables independientes, tipo de variables independientes y forma de la línea de regresión).
+
+El enfoque de este reporte es enteder en forma fundamental lo que es un Análisis de Regresión y en que forma influye el uso de la Distancia de Cook al momento de seleccionar la data para realizar el modelado, por ese motivo se presentará como ejemplo educativo el siguiente tipo de Regresión.
+
+
+###  Regresión Lineal Simple
+
+Es el modelo gráfico más simple que relaciona la variable dependiente $y$ a una única variable dependiente $x$, lo cual suele referirse como una linea recta al momento de hacer un gráfico de dispersión de la data $y$ vs. $x$.
+
+Consideremos la duración de las erupciones y el tiempo entre cada erupción del volcan Old Faithful en el Parque Nacional Yellowstone. 
+
+```{r faithfuldataset, comment=NA, prompt = TRUE, eval=TRUE, echo=FALSE}
+library(ggplot2) 
+data("faithful") #cargar el dataframe 
+head(faithful)
+
+```
+
+El dataset forma parte de la libreria `ggplot2` y nos brinda la información para realizar este ejemplo.
+
+Necesitamos proponer un modelo probabilistico que se ajuste a los datos que tenemos en donde `faithful$eruptions` es la variable dependiente, ya que deseamos predecir el tiempo que duraría una próxima erupción; y `faithful$waiting` la única variable independiente. Esto se logra con el más simple de los modelos una `linea recta de primer orden`. 
+
+\[y= \beta_0 +\beta_1x+\varepsilon
+\]
+
+En donde $y$ es `faithful$eruptions`, $x$ es `faithful$waiting`,  $E(y)=β_0 +β_1x$ el componente determinista y $ε$ la componente de error.
+
+Para nosotros poder ajustar esto vamos a usar la función `lm` para generar el modelo lineal en R.
+```{r faithfuldataset2, comment=NA, prompt = TRUE, eval=TRUE}
+eruption.lm <- lm(eruptions ~ waiting, data=faithful)
+#Detalle del modelo
+summary(eruption.lm)
+
+```
+
+Podemos abtraer  mucha más información sobre este resumen si usamos la función `plot` para poder visualizar ciertas gráficas con respecto al modelo lineal de `eruption.lm`.
+
+```{r faithfuldataset3, comment=NA, prompt = TRUE, eval=TRUE, echo=FALSE}
+plot(eruption.lm)
+
+```
+
+Hay ciertos valores númericos que aparecen a lo largo de las gráficas, dichos valores nno guardan ninguna importancia en estos momentos pero cabe mencionar que tienen una gran influenza en el modelado de la data.
+
+Ahora que ya tenemos el modelo lineal para las erupciones, podemos *predecir* los posibles resultados que `faithful$eruptions` pueda tomar para ciertos valores de `faithful$waiting`.
+
+```{r faithfuldataset4, comment=NA, prompt = TRUE, eval=TRUE}
+ndata<- data.frame(waiting=74)
+predict(eruption.lm,ndata)
+head(faithful)
+```
+
+La predicción que tenemos es que para un tiempo de espera de 74 minutos, la próxima erupción va a durar 3.72 minutos, aproximadamente. Sin embargo, de la data que tenemos sobre el volcan sabemos que el tiempo de erupcion asociado a un tiempo de espera de 74 minutos es en realidad 3.33. 
+
+Si tratamos de representar mejor el modelado que realiza la funcion `lm`, seria una linea recta en el grafico de dispersión de la data como se muestra continuación. Lo cual nos permite observar una gran cantidad de puntos no estan ubicados en la linea recta. La distancia vertical de estos puntos hasta la linea de ajuste es lo que se considera el error de predicción o residual, la diferencia entre el valor predecido y real para el caso de un tiempo de espera de 74 minutos, 0.39 minutos.
+
+
+```{r faithfuldataset5, prompt=TRUE, eval=TRUE}
+library(ggplot2)
+ggplot(data = faithful, mapping = aes(x = waiting, y = eruptions)) + geom_point() + geom_smooth(method = lm,se=FALSE)
+
+```
+
+
+Si bien es cierto, se puede trasladar dicha linea de varias formas en el grafico de dispersion, tal que los errores de predicción o residuales pueden cambian de valor para cada $x_i$, pero hay un motivo por el cual la representación anterior es la que mejor se ajusta a la gráfica y eso se debe a el metodo de Mínimos Cuadrados.
+
+## Método de Minimos Cuadrados
+
+Cabe resaltar que al hacer uso de este metodo la suma de todos los residuales debe ser igual a cero(**SE**).
+
+\[ \sum_{i=0}^n{ y_i-\hat{y_i}}=0\]
+
+Pero lo que es aún más importante para este método es la suma de los cuadrados de los residuales(**SSE**). En regresión, el ajuste que se realice a cualquier conjunto de datos nos va a dar como resultado una línea de dispersión en donde dicha suma es la minima posible, esta línea es la que se conoce como `línea de minimos cuadrados`, `línea de regresión` o `ecuación de predicción de minimos cuadrados`.
+
+Para encontrar esta ecuación, se asume que tenemos la siguiente data $(x_1,y_1),(x_2,y_2),\dots (x_n,y_n)$. La línea recta de ajuste esta data por:
+
+\[y = \beta_0 +\beta_1x+ \varepsilon
+\]
+En donde la línea del valor esperado o mediana es: 
+
+\[E(y) = \beta_0 +\beta_1x 
+\]
+
+Y la línea de ajuste, que es lo que deseamos encontrar, esta representada por
+
+\[
+\hat{y}=\hat{\beta_0}+\hat{\beta_1}x
+\]
+
+Estos valores se consideran los estimadores de $y,\beta_0$ y $\beta_1$, respectivamente, ya que difieren de los valores que en si formar parte de la ecuación original. 
+
+El error de predicción para el valor $y_i$, el i-ésimo residual, es:
+
+\[
+(y_i-\hat{y_i})=y_i -(\hat{\beta_0}+\hat{\beta_1}x_i)
+\]
+Luego, la suma de los cuadrados de los residuales esta dada por,
+\[
+SSE = \sum_{i=1}^n[y_i -(\hat{\beta_0}+\hat{\beta_1}x_i)]^2
+\]
+Aquellos valores de $\beta_0$ y $\beta_1$ que hacen que SSE tome el mínimo valor posible son conocidos como **estimadores de mínimos cuadrados**.
+
+```{r residuals, comment=NA, prompt=TRUE, eval=TRUE}
+residuales<-residuals(eruption.lm)
+predicciones<-fitted.values(eruption.lm)
+hist(residuales, main= "Histograma de Residuales de Dataset Faithful")
+plot(predicciones,residuales, main = "Predicciones vs Residuales", xlab = "Predicciones", ylab = "Residuales")
+
+```
+
+
+## Distancia de Cook
+
+La Distancia de Cook es un estimador para medir la influencia de cierta data en un analisis de regresión que utiliza el método de los mínimos cuadrados para obtener la línea de dispersión que modela mejor la data inicial. Nos permite reconocer ciertos datos que pueden ser de importancia a la hora de modelar la data o también reconocer ciertas regiones de la data dispersa en el gráfico que puede brindar mayor información de interes. 
+
+La formdula de $D_i$ es,
+
+\[
+D_i = \frac{(y_i - \hat{y_i})^2}{(k+1)s^2}[\frac{h_i}{(1-h_i)^2}]
+\]
+En donde, $(y_i - \hat{y_i})$ es el i-esimo residual, $s^2$ es la media de la suma de los errores de prediccion y $h_i$ es la ventaja (`leverage`) que tiene el dato i-esimo en respecto a la distancia que lo separa de los otros datos.
+
+
+Vamos a dar un ejemplo para el cual vamos a usar el dataset `mtcars`, que guarda informacion sobre 32 tipos de automoviles publicados en la revisata *Motor Trend US*
+
+Vamos a modelar una regresión lineal multiple, esta difiere del ejemplo antes mostrado en que la cantidad de variables independientes es mayor a uno.
+En donde vamos a predecir las millas por galon que un automovil puede usar tomando como variables independientes `cyl`, el numero de cilindros y `wt`, el peso del automovil.
+
+```{r cookdistance, prompt=TRUE,eval=TRUE}
+## Dataset mtcars
+data("mtcars")
+cars.lm<-lm(mpg~cyl+wt, data = mtcars)
+plot(cars.lm, col="blue")
+
+```
+
+El ultimo grafico nos brinda gran informacion sobre los modelos `Toyota Corolla`, `Fiat1 128` y `Chrysler Imperial`, lo cual se puede apreciar mejor aún en el siguiente gráfico.
+
+```{r cook1, eval=TRUE}
+plot(cars.lm, col="blue", which=c(4))
+
+```
+
+
+Podemos observa que los nombres de los automoviles previamente mencionados son aquellos con la más grande Distancias de  Cook, para conocer los valores numericos de dichas distancias ejecutemos el siguiente codigo.
+```{r cook3, eval=TRUE}
+rev(sort(round(cooks.distance(cars.lm),5)))
+
+```
+
+El que estos tres modelos tengan una distancia mucho mayor en comparación a los otros 29 modelos de automoviles afecta en forma negativa a nuestro modelo de regresión. Lo cual se entiende ya que a mayor sea el residual o error de prediccion de un dato observado mayor será su Distancia de Cook y más alejado se encontrará de la línea de regresión.
+
+La ventaja de usar este estimador es que nos permite identificar aquellos valores que afectan negativamente al modelado de la data que intentamos ajustar usando el metedo de los minimos cuadrados o alguna técnica lineal de regresión, de esta forma podemos excluir aquellos valores para tener una linea de regresión con un mejor ajuste a la data inicial.
+
+## Referencias
+
+* William Mendenhall. A Second Course in Statistics: Regression Analysis. 7th Edition. Prentice Hall. 2011.
+
+* Cook, R. Dennis; Weisberg, Sanford. Residuals and Influence in Regression. New York, NY: Chapman & Hall.
+
+* [A Refreshner on Regression Analysis](https://hbr.org/2015/11/a-refresher-on-regression-analysis)
+
+* [Tecnicas de Regresión](http://www.statmethods.net/stats/regression.html)
+
+* [Introduction to Simple Linear Regression](https://www.youtube.com/watch?v=KsVBBJRb9TE)
+
+* [Breve información sobre Distancia de Cook](https://en.wikipedia.org/wiki/Cook%27s_distance)
+
+* [Comprehensive Guide to Regression](https://www.analyticsvidhya.com/blog/2015/08/comprehensive-guide-regression/)
+
+* [Compute the Cook's distance - R Documentation](https://artax.karlin.mff.cuni.cz/r-help/library/influence.ME/html/cooks.distance.estex.html)
+
+
+
+
